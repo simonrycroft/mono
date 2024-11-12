@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: monitoring
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: 3100
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+            http:
+
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: inmemory
+
+    storage:
+      trace:
+        backend: s3
+        s3:
+          endpoint: minio.monitoring.svc.cluster.local:9000
+          bucket: tempo
+          access_key: minioadmin
+          secret_key: minioadmin
+          insecure: true
+
+    compactor:
+      compaction:
+        compacted_block_retention: 24h
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: monitoring
+  labels:
+    app: tempo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+    spec:
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.0.0
+          ports:
+            - containerPort: 3100
+          args:
+            - "-config.file=/etc/tempo/tempo.yaml"
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "minioadmin"  # Updated key to match MinIO credentials
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minioadmin"  # Updated key to match MinIO credentials
+          volumeMounts:
+            - name: tempo-config
+              mountPath: /etc/tempo/tempo.yaml
+              subPath: tempo.yaml
+      volumes:
+        - name: tempo-config
+          configMap:
+            name: tempo-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+  selector:
+    app: tempo

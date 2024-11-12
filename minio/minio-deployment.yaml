@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: monitoring
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          args:
+            - server
+            - /data
+            - "--console-address"  # Set the console to a fixed port
+            - ":9001"              # This binds the web UI to port 9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: accesskey
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: secretkey
+          ports:
+            - containerPort: 9000   # MinIO API Port
+            - containerPort: 9001   # MinIO Web UI Port
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+      volumes:
+        - name: minio-data
+          persistentVolumeClaim:
+            claimName: minio-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: monitoring
+spec:
+  selector:
+    app: minio
+  ports:
+    - protocol: TCP
+      name: api
+      port: 9000       # API Port
+      targetPort: 9000
+    - protocol: TCP
+      name: webui
+      port: 9001       # Web UI Port
+      targetPort: 9001
+  type: ClusterIP
+
+
