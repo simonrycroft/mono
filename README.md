@@ -34,6 +34,7 @@ kubectl apply -f prometheus/prometheus-deployment.yaml
 kubectl apply -f grafana/grafana-deployment.yaml
 kubectl apply -f otel-collector/otel-collector-deployment.yaml
 kubectl apply -f loki/loki-deployment.yaml
+kubectl apply -f fluent-bit/fluent-bit-daemonset.yaml
 kubectl apply -f minio/minio-secret.yaml
 kubectl apply -f minio/minio-deployment.yaml
 kubectl apply -f tempo/tempo-deployment.yaml

@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: monitoring
+  labels:
+    k8s-app: fluent-bit
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         1
+        Daemon        Off
+        Log_Level     debug
+        Parsers_File  parsers.conf
+
+    [INPUT]
+        Name          tail
+        Path          /var/log/containers/*.log
+        Parser        docker
+        Tag           kube.*
+        Mem_Buf_Limit 5MB
+        Skip_Long_Lines On
+        Refresh_Interval 10
+
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_Tag_Prefix     kube.var.log.containers.
+        Merge_Log           On
+        Labels              On
+        Annotations         On
+        Kube_Meta_Cache_TTL 60
+
+    [OUTPUT]
+        Name          loki
+        Match         *
+        Host          loki.monitoring.svc.cluster.local
+        Port          3100
+        Labels        job=fluent-bit, namespace=$kubernetes['namespace_name'], pod=$kubernetes['pod_name'], app=$kubernetes['labels']['app']
+        Auto_Kubernetes_Labels On
+    
+    
+    [OUTPUT]
+        Name          stdout
+        Match         *
+
+  parsers.conf: |
+    [PARSER]
+        Name         docker
+        Format       json
+        Time_Key     time
+        Time_Format  %Y-%m-%dT%H:%M:%S.%L
+        Time_Keep    On
+        Decode_Field_As escaped_utf8 log
+        Decode_Field_As json log
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: monitoring
+  labels:
+    k8s-app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      k8s-app: fluent-bit
+  template:
+    metadata:
+      labels:
+        k8s-app: fluent-bit
+    spec:
+      serviceAccountName: fluent-bit
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:1.8
+          resources:
+            limits:
+              memory: 200Mi
+              cpu: 500m
+            requests:
+              memory: 100Mi
+              cpu: 100m
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit.conf
+              subPath: fluent-bit.conf
+            - name: config
+              mountPath: /fluent-bit/etc/parsers.conf
+              subPath: parsers.conf
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: config
+          configMap:
+            name: fluent-bit-config
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluent-bit-role
+  labels:
+    k8s-app: fluent-bit
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fluent-bit-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fluent-bit-role
+subjects:
+  - kind: ServiceAccount
+    name: fluent-bit
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  namespace: monitoring
+  labels:
+    k8s-app: fluent-bit

@@ -37,6 +37,13 @@ spec:
           ports:
             - containerPort: 9000   # MinIO API Port
             - containerPort: 9001   # MinIO Web UI Port
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "1000m"
+            limits:
+              memory: "2048Mi"
+              cpu: "2000m"
           volumeMounts:
             - name: minio-data
               mountPath: /data
