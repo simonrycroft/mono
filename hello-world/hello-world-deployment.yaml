@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: hello-world
-          image: hello-world:v5
+          image: goapp:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

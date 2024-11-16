@@ -13,12 +13,16 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
 var tracer trace.Tracer
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
 	// Setup Prometheus metrics
 	requests := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "hello_world_requests_total",
@@ -53,6 +57,7 @@ func main() {
 
 	// HTTP handler for /hello endpoint
 	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("Handling /hello request")
 		// Start a span for the request
 		_, span := tracer.Start(r.Context(), "HelloHandler")
 		defer span.End()
@@ -63,12 +68,15 @@ func main() {
 		// Increase the Prometheus counter
 		requests.Inc()
 
-		fmt.Fprintln(w, "Hello, World!")
+		fmt.Fprintln(w, "Hello, World! goapp:latest 01")
 	})
 
 	// Prometheus metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
-	fmt.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	logger.Info("Starting server on :8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		logger.Error("Server failed to start", "error", err)
+		os.Exit(1)
+	}
 }
