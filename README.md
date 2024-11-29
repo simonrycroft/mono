@@ -19,6 +19,31 @@ This is an initial Hello World example that aims to stand up the following Kuber
 ## How to Run
 
 ```bash
+# Create a k3d Cluster
+k3d cluster create simple-cluster --servers 1 --agents 2 --port "8081:8080@loadbalancer"
+
+
+
+# Build the Docker image locally
+docker build -t go-app:latest .
+
+# Import the image into the k3d cluster
+k3d image import go-app:latest -c simple-cluster
+
+# Install the Helm Chart
+helm upgrade --install go-app ./go-app -n default --create-namespace
+
+# Check pods are running
+kubectl get pods -n default
+
+# Set up port forwarding
+kubectl port-forward svc/go-app-go-app-service 8080:8080 -n default
+
+# Access the service
+curl http://localhost:8080
+```
+
+```bash
 # start minikube with enough resources
 minikube start --memory=6144 --cpus=4
 
@@ -39,7 +64,7 @@ kubectl apply -f minio/minio-secret.yaml
 kubectl apply -f minio/minio-deployment.yaml
 kubectl apply -f tempo/tempo-deployment.yaml
 
-# log into minIO and create a bucket called "tempo"
+# log into minIO and create a buckets called "loki" and "tempo"
 kubectl port-forward svc/minio -n monitoring 9001:9001 
 
 # check all pods are running
